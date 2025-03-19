@@ -2,7 +2,13 @@ FROM python:3.10-slim-buster
 WORKDIR /app
 COPY . /app
 
-RUN apt update -y && apt install awscli - y
+#Installing required packages
+RUN pip install --trusted-host pypi.python.org -r requirements.txt
 
-RUN apt-get update && pip install -r requirements.txt
+#Open port 5000
+EXPOSE 5000
+
+#Set environment variable
+ENV NAME OpentoAll
+
 CMD [ "python", "app.py" ]
