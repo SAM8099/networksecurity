@@ -2,11 +2,13 @@ from networksecurity.components.data_ingestion import DataIngestion
 from networksecurity.components.data_validation import DataValidation
 from networksecurity.components.data_transformation import DataTransformation
 from networksecurity.components.model_trainer import ModelTrainer
-
+from networksecurity.cloud.azure_blob_sync import AzureBlobSync
 from networksecurity.exception.exception import NetworkSecurityException
 from networksecurity.logging.logger import logging
 import os
 import sys
+from dotenv import load_dotenv
+load_dotenv()
 
 from networksecurity.entity.config_entity import(
     TrainingPipelineConfig,
@@ -31,6 +33,10 @@ import sys
 class TrainingPipeline:
     def __init__(self):
         self.training_pipeline_config=TrainingPipelineConfig()
+        self.azure_sync = AzureBlobSync(
+            connection_string=os.getenv("AZURE_STORAGE_CONNECTION_STRING"),
+            container_name="containerforphis"
+        )
         
 
     def start_data_ingestion(self):
@@ -85,21 +91,21 @@ class TrainingPipeline:
             raise NetworkSecurityException(e, sys)
 
     ## local artifact is going to s3 bucket    
-    def sync_artifact_dir_to_s3(self):
+    def sync_artifact_dir_to_azure(self):
         try:
-            aws_bucket_url = f"s3://{TRAINING_BUCKET_NAME}/artifact/{self.training_pipeline_config.timestamp}"
-            self.s3_sync.sync_folder_to_s3(folder = self.training_pipeline_config.artifact_dir,aws_bucket_url=aws_bucket_url)
+            blob_path = f"artifact/{self.training_pipeline_config.timestamp}"
+            self.azure_sync.upload_folder(folder_path=self.training_pipeline_config.artifact_dir, blob_path_prefix=blob_path)
         except Exception as e:
-            raise NetworkSecurityException(e,sys)
+            raise NetworkSecurityException(e, sys)
         
     ## local final model is going to s3 bucket 
         
-    def sync_saved_model_dir_to_s3(self):
+    def sync_saved_model_dir_to_azure(self):
         try:
-            aws_bucket_url = f"s3://{TRAINING_BUCKET_NAME}/final_model/{self.training_pipeline_config.timestamp}"
-            self.s3_sync.sync_folder_to_s3(folder = self.training_pipeline_config.model_dir,aws_bucket_url=aws_bucket_url)
+            blob_path = f"final_model/{self.training_pipeline_config.timestamp}"
+            self.azure_sync.upload_folder(folder_path=self.training_pipeline_config.model_dir, blob_path_prefix=blob_path)
         except Exception as e:
-            raise NetworkSecurityException(e,sys)
+            raise NetworkSecurityException(e, sys)
         
     
     
@@ -110,8 +116,8 @@ class TrainingPipeline:
             data_transformation_artifact=self.start_data_transformation(data_validation_artifact=data_validation_artifact)
             model_trainer_artifact=self.start_model_trainer(data_transformation_artifact=data_transformation_artifact)
             
-            self.sync_artifact_dir_to_s3()
-            self.sync_saved_model_dir_to_s3()
+            self.sync_artifact_dir_to_azure()
+            self.sync_saved_model_dir_to_azure()
             
             return model_trainer_artifact
         except Exception as e:
